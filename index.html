@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Smart Image Resizer — AWS Pipeline</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --border: #1e1e2e;
+      --accent: #00ffb2;
+      --accent2: #7c3aed;
+      --accent3: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --danger: #ef4444;
+      --success: #10b981;
+      --card: #13131d;
+      --glow: 0 0 30px rgba(0, 255, 178, 0.15);
+    }
+ 
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+ 
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+ 
+    /* Background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,255,178,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,178,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+ 
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+ 
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.5rem 0 3rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 3rem;
+    }
+ 
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+ 
+    .logo-icon {
+      width: 42px; height: 42px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem;
+    }
+ 
+    .logo-text {
+      font-size: 1.3rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+ 
+    .logo-text span { color: var(--accent); }
+ 
+    .badge {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      padding: 0.3rem 0.75rem;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      border-radius: 999px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+ 
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+ 
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -1.5px;
+      margin-bottom: 1rem;
+    }
+ 
+    .hero h1 .highlight {
+      background: linear-gradient(90deg, var(--accent), #00bcd4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+ 
+    .hero p {
+      color: var(--muted);
+      font-size: 1.05rem;
+      max-width: 540px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+ 
+    /* ── Main Grid ── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+ 
+    @media (max-width: 768px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+ 
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.75rem;
+      transition: border-color 0.3s;
+    }
+ 
+    .panel:hover { border-color: rgba(0,255,178,0.2); }
+ 
+    .panel-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+ 
+    .panel-label::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+ 
+    /* ── Upload Zone ── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+ 
+    .upload-zone:hover,
+    .upload-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(0,255,178,0.03);
+      box-shadow: var(--glow);
+    }
+ 
+    .upload-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+    }
+ 
+    .upload-icon {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+      display: block;
+    }
+ 
+    .upload-zone h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.4rem;
+    }
+ 
+    .upload-zone p {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+ 
+    /* ── Preview ── */
+    .preview-box {
+      width: 100%;
+      min-height: 200px;
+      border-radius: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      margin-top: 1rem;
+      position: relative;
+    }
+ 
+    .preview-box img {
+      max-width: 100%;
+      max-height: 250px;
+      object-fit: contain;
+      border-radius: 6px;
+    }
+ 
+    .preview-placeholder {
+      color: var(--muted);
+      font-size: 0.85rem;
+      text-align: center;
+    }
+ 
+    .file-info {
+      margin-top: 0.75rem;
+      padding: 0.75rem;
+      background: var(--surface);
+      border-radius: 8px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      display: none;
+    }
+ 
+    .file-info.visible { display: block; }
+ 
+    .file-info span { color: var(--accent); }
+ 
+    /* ── Config Panel ── */
+    .config-full {
+      grid-column: 1 / -1;
+    }
+ 
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.25rem;
+    }
+ 
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+ 
+    label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+ 
+    input[type="number"],
+    select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.85rem;
+      padding: 0.65rem 0.9rem;
+      width: 100%;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+      -webkit-appearance: none;
+    }
+ 
+    input[type="number"]:focus,
+    select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,255,178,0.1);
+    }
+ 
+    /* ── Preset Buttons ── */
+    .preset-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.5rem;
+    }
+ 
+    .presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+ 
+    .preset-btn {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      padding: 0.4rem 0.85rem;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+ 
+    .preset-btn:hover,
+    .preset-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(0,255,178,0.08);
+    }
+ 
+    /* ── Multi-size checkboxes ── */
+    .sizes-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.6rem;
+      margin-top: 0.5rem;
+    }
+ 
+    .size-check {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+    }
+ 
+    .size-check input[type="checkbox"] {
+      accent-color: var(--accent);
+      width: 15px; height: 15px;
+    }
+ 
+    .size-check span {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--text);
+    }
+ 
+    /* ── Submit Button ── */
+    .submit-row {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: center;
+      margin-top: 0.5rem;
+    }
+ 
+    .btn-submit {
+      background: linear-gradient(135deg, var(--accent), #00d4aa);
+      color: #0a0a0f;
+      border: none;
+      padding: 0.9rem 2.5rem;
+      border-radius: 10px;
+      font-family: 'Syne', sans-serif;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+      letter-spacing: 0.03em;
+      transition: all 0.25s;
+      min-width: 220px;
+      position: relative;
+      overflow: hidden;
+    }
+ 
+    .btn-submit:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+ 
+    .btn-submit:not(:disabled):hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0,255,178,0.35);
+    }
+ 
+    .btn-submit .spinner {
+      display: none;
+      width: 18px; height: 18px;
+      border: 2px solid rgba(0,0,0,0.3);
+      border-top-color: #0a0a0f;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto;
+    }
+ 
+    .btn-submit.loading .btn-text { display: none; }
+    .btn-submit.loading .spinner { display: block; }
+ 
+    @keyframes spin { to { transform: rotate(360deg); } }
+ 
+    /* ── Progress Bar ── */
+    .progress-wrapper {
+      grid-column: 1 / -1;
+      display: none;
+    }
+ 
+    .progress-wrapper.visible { display: block; }
+ 
+    .progress-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+    }
+ 
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #00d4aa);
+      border-radius: 999px;
+      transition: width 0.4s ease;
+      width: 0%;
+      box-shadow: 0 0 10px var(--accent);
+    }
+ 
+    .progress-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-align: center;
+      margin-bottom: 0.4rem;
+    }
+ 
+    /* ── Results ── */
+    .results-section {
+      display: none;
+      margin-top: 2rem;
+    }
+ 
+    .results-section.visible { display: block; }
+ 
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+    }
+ 
+    .results-header h2 {
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+ 
+    .result-count {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--accent);
+    }
+ 
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+ 
+    .result-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: all 0.3s;
+      animation: fadeUp 0.4s ease forwards;
+      opacity: 0;
+    }
+ 
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+ 
+    .result-card:hover {
+      border-color: rgba(0,255,178,0.3);
+      transform: translateY(-3px);
+      box-shadow: var(--glow);
+    }
+ 
+    .result-img-wrap {
+      width: 100%;
+      height: 140px;
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+ 
+    .result-img-wrap img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+ 
+    .result-meta {
+      padding: 0.9rem;
+    }
+ 
+    .result-size-tag {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      background: rgba(0,255,178,0.1);
+      color: var(--accent);
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 0.5rem;
+    }
+ 
+    .result-meta p {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+ 
+    .btn-download {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 7px;
+      padding: 0.5rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: block;
+      text-align: center;
+    }
+ 
+    .btn-download:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(0,255,178,0.07);
+    }
+ 
+    /* ── Pipeline Status ── */
+    .pipeline {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      padding: 1.25rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      flex-wrap: wrap;
+    }
+ 
+    .pipe-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.5rem 1rem;
+    }
+ 
+    .pipe-icon {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      transition: all 0.3s;
+    }
+ 
+    .pipe-step.active .pipe-icon {
+      border-color: var(--accent);
+      background: rgba(0,255,178,0.1);
+      box-shadow: 0 0 12px rgba(0,255,178,0.2);
+    }
+ 
+    .pipe-step.done .pipe-icon {
+      border-color: var(--success);
+      background: rgba(16,185,129,0.1);
+    }
+ 
+    .pipe-name {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.6rem;
+      color: var(--muted);
+      text-align: center;
+    }
+ 
+    .pipe-step.active .pipe-name { color: var(--accent); }
+    .pipe-step.done .pipe-name   { color: var(--success); }
+ 
+    .pipe-arrow {
+      color: var(--border);
+      font-size: 1rem;
+      margin: 0 0.25rem;
+    }
+ 
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 2rem; right: 2rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.9rem 1.25rem;
+      font-size: 0.85rem;
+      max-width: 300px;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1);
+      z-index: 100;
+    }
+ 
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.error { border-color: var(--danger); }
+    .toast.success { border-color: var(--success); }
+ 
+    /* ── Config note ── */
+    .config-note {
+      grid-column: 1 / -1;
+      padding: 0.85rem 1rem;
+      background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.25);
+      border-radius: 8px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--accent3);
+      line-height: 1.6;
+    }
+ 
+    .config-note strong { display: block; margin-bottom: 0.3rem; }
+  </style>
+</head>
+<body>
+ 
+<div class="container">
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <div class="logo-text">Image<span>Resize</span></div>
+    </div>
+    <span class="badge">AWS S3 + Lambda</span>
+  </header>
+ 
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Smart <span class="highlight">Image Resizing</span><br/>Pipeline</h1>
+    <p>Upload your image and get multiple resized outputs instantly — powered by AWS Lambda and S3.</p>
+  </div>
+ 
+  <!-- Pipeline Visualizer -->
+  <div class="main-grid" style="margin-bottom:1.5rem">
+    <div class="pipeline" id="pipelineViz">
+      <div class="pipe-step" id="ps-upload">
+        <div class="pipe-icon">📤</div>
+        <div class="pipe-name">Upload</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step" id="ps-s3in">
+        <div class="pipe-icon">🪣</div>
+        <div class="pipe-name">S3 Input</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step" id="ps-lambda">
+        <div class="pipe-icon">λ</div>
+        <div class="pipe-name">Lambda</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step" id="ps-resize">
+        <div class="pipe-icon">🔄</div>
+        <div class="pipe-name">Resize</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step" id="ps-s3out">
+        <div class="pipe-icon">📦</div>
+        <div class="pipe-name">S3 Output</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step" id="ps-done">
+        <div class="pipe-icon">✅</div>
+        <div class="pipe-name">Download</div>
+      </div>
+    </div>
+  </div>
+ 
+  <!-- Config Note -->
+  <div class="main-grid" style="margin-bottom:1.5rem">
+    <div class="config-note">
+      <strong>⚙️ Setup Required</strong>
+      Edit <code>config</code> in <code>app.js</code> with your API Gateway URL and S3 bucket name before running.
+      See <code>README.md</code> for full AWS setup instructions.
+    </div>
+  </div>
+ 
+  <!-- Main Grid -->
+  <div class="main-grid">
+    <!-- Upload Panel -->
+    <div class="panel">
+      <div class="panel-label">01 — Upload Image</div>
+      <div class="upload-zone" id="dropZone">
+        <input type="file" id="fileInput" accept="image/*"/>
+        <span class="upload-icon">🖼️</span>
+        <h3>Drop image here</h3>
+        <p>or click to browse — JPEG, PNG, WebP, GIF</p>
+      </div>
+      <div class="preview-box" id="previewBox">
+        <div class="preview-placeholder">Preview will appear here</div>
+      </div>
+      <div class="file-info" id="fileInfo">
+        Name: <span id="infoName">—</span><br/>
+        Size: <span id="infoSize">—</span><br/>
+        Type: <span id="infoType">—</span>
+      </div>
+    </div>
+ 
+    <!-- Resize Config Panel -->
+    <div class="panel">
+      <div class="panel-label">02 — Resize Settings</div>
+ 
+      <div style="margin-bottom:1.25rem">
+        <div class="preset-label">Quick Presets</div>
+        <div class="presets">
+          <button class="preset-btn" data-w="1920" data-h="1080">1920×1080</button>
+          <button class="preset-btn" data-w="1280" data-h="720">1280×720</button>
+          <button class="preset-btn" data-w="800" data-h="600">800×600</button>
+          <button class="preset-btn" data-w="400" data-h="400">400×400</button>
+          <button class="preset-btn" data-w="150" data-h="150">Thumbnail</button>
+        </div>
+      </div>
+ 
+      <div class="config-grid">
+        <div class="form-group">
+          <label>Width (px)</label>
+          <input type="number" id="widthInput" placeholder="e.g. 800" min="1" max="8000"/>
+        </div>
+        <div class="form-group">
+          <label>Height (px)</label>
+          <input type="number" id="heightInput" placeholder="e.g. 600" min="1" max="8000"/>
+        </div>
+        <div class="form-group">
+          <label>Output Format</label>
+          <select id="formatSelect">
+            <option value="JPEG">JPEG</option>
+            <option value="PNG">PNG</option>
+            <option value="WEBP">WebP</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Quality (%)</label>
+          <input type="number" id="qualityInput" value="85" min="10" max="100"/>
+        </div>
+      </div>
+ 
+      <div style="margin-top:1.25rem">
+        <div class="preset-label">Batch Sizes (generate all)</div>
+        <div class="sizes-grid">
+          <label class="size-check">
+            <input type="checkbox" value="thumbnail" data-w="150" data-h="150" checked/><span>Thumb 150</span>
+          </label>
+          <label class="size-check">
+            <input type="checkbox" value="small" data-w="320" data-h="240"/><span>Small 320</span>
+          </label>
+          <label class="size-check">
+            <input type="checkbox" value="medium" data-w="640" data-h="480"/><span>Med 640</span>
+          </label>
+          <label class="size-check">
+            <input type="checkbox" value="large" data-w="1024" data-h="768"/><span>Large 1024</span>
+          </label>
+          <label class="size-check">
+            <input type="checkbox" value="hd" data-w="1280" data-h="720"/><span>HD 1280</span>
+          </label>
+          <label class="size-check">
+            <input type="checkbox" value="fhd" data-w="1920" data-h="1080"/><span>FHD 1920</span>
+          </label>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Progress -->
+    <div class="progress-wrapper" id="progressWrapper">
+      <div class="progress-label" id="progressLabel">Uploading to S3…</div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+    </div>
+ 
+    <!-- Submit -->
+    <div class="submit-row">
+      <button class="btn-submit" id="submitBtn" disabled>
+        <span class="btn-text">⚡ Process Image</span>
+        <div class="spinner"></div>
+      </button>
+    </div>
+  </div>
+ 
+  <!-- Results -->
+  <div class="results-section" id="resultsSection">
+    <div class="results-header">
+      <h2>Resized Outputs</h2>
+      <span class="result-count" id="resultCount">0 files</span>
+    </div>
+    <div class="results-grid" id="resultsGrid"></div>
+  </div>
+</div>
+ 
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+ 
+<script src="app.js"></script>
+</body>
+</html>
